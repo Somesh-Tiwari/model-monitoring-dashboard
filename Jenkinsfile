@@ -9,31 +9,37 @@ pipeline {
             }
         }
         
-        stage('Automated ML Testing') {
+        stage('Install and Validate Models') {
             steps {
-                echo 'Running Python tests on the machine learning model...'
-                echo 'Model baseline accuracy verified. Proceeding...'
+                sh 'python -m pip install --upgrade pip'
+                sh 'pip install -r requirements.txt'
+                sh 'python -m py_compile app/main.py app/train.py'
+                sh 'python app/train.py'
             }
         }
         
         stage('UI Testing (Selenium)') {
             steps {
-                echo 'Executing JavaScript Selenium UI tests...'
-                echo 'Dashboard rendered correctly. All tests passed.'
+                sh '''
+                    python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
+                    server_pid=$!
+                    trap "kill $server_pid" EXIT
+                    sleep 5
+                    npm --prefix tests install
+                    npm --prefix tests test
+                '''
             }
         }
         
         stage('Build Docker Image') {
             steps {
-                echo 'Building container image: docker build -t model-dashboard .'
-                echo 'Docker image successfully built.'
+                sh 'docker build -t model-dashboard .'
             }
         }
         
         stage('Deploy Application') {
             steps {
-                echo 'Deploying to production: docker run -d -p 8000:8000 model-dashboard'
-                echo 'Model Monitoring Dashboard is live!'
+                sh 'docker run -d --rm -p 8000:8000 model-dashboard'
             }
         }
     }

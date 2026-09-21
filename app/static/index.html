@@ -1,157 +1,116 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Model Telemetry</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Model-Monitoring-Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Libre+Baskerville:wght@400;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Inter', sans-serif; background-color: #0B0F19; color: #E2E8F0; }
-    .tech-font { font-family: 'JetBrains Mono', monospace; }
-    .glass-panel { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); }
+    :root { --ink: #04222b; --deep-teal: #0a3d4a; --teal: #10606f; --cyan: #1d8b94; --aqua: #4fb8b4; --mist: #98d8d0; --cream: #e2f4f0; --muted: #a7d8d4; --line: rgba(226,244,240,.22); --accent: #98d8d0; --status: #4fb8b4; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; color: var(--cream); font-family: 'Manrope', sans-serif; font-size: 15px; background: radial-gradient(circle at 50% 42%, rgba(29,139,148,.32) 0, transparent 36%), var(--ink); }
+    button, a { font: inherit; }
+    .mono { font-family: 'DM Mono', monospace; }
+    .shell { width: 100%; min-height: 100vh; display: grid; grid-template-columns: 220px 1fr; background: var(--ink); }
+    .rail, .surface { background: var(--ink); }
+    .rail { padding: 30px 14px 22px; display: flex; flex-direction: column; }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 0 12px 34px; font-family: 'Libre Baskerville', serif; font-size: 15px; font-weight: 700; line-height: 1.35; }
+    .nav { display: grid; gap: 5px; }
+    .nav-link { display: flex; align-items: center; gap: 13px; padding: 12px 13px; color: var(--mist); border-radius: 10px; text-decoration: none; font-size: 14px; transition: .2s ease; }
+    .nav-link:hover, .nav-link.active { color: var(--cream); background: linear-gradient(100deg, var(--cyan), var(--teal)); }
+    .surface { min-width: 0; padding: 20px clamp(24px, 5vw, 76px) 22px; overflow: hidden; background: radial-gradient(circle at 75% 15%, rgba(29,139,148,.24), transparent 38%), var(--deep-teal); }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 10px; }
+    .eyebrow { margin: 0 0 7px; color: var(--mist); font-size: 12px; letter-spacing: .08em; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1, h2 { font-family: 'Libre Baskerville', serif; letter-spacing: 0; }
+    h1 { margin-bottom: 5px; font-size: clamp(24px, 2.8vw, 34px); line-height: 1.15; }
+    .subtitle { margin: 0; color: var(--cream); opacity: .8; font-size: 13px; }
+    .model-selector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .model-option { padding: 8px 12px; text-align: left; color: var(--mist); background: rgba(4,34,43,.7); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; transition: .2s ease; }
+    .model-option:hover, .model-option.active { color: var(--cream); border-color: var(--aqua); background: linear-gradient(135deg, var(--teal), var(--deep-teal)); }
+    .model-option strong, .model-option span { display: block; }
+    .model-option strong { margin-bottom: 5px; font-size: 13px; font-weight: 600; }
+    .model-option span { font-size: 10px; opacity: .8; }
+    .dashboard-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .card { min-width: 0; border: 1px solid var(--line); border-radius: 16px; background: rgba(4,34,43,.72); }
+    .card-pad { padding: 13px; }
+    .metric { min-height: 74px; background: radial-gradient(circle at 75% 110%, rgba(79,184,180,.58), transparent 43%), var(--teal); }
+    .label { color: var(--cream); font-size: 14px; }
+    .metric-value { margin: 6px 0 2px; font-size: 25px; font-weight: 600; letter-spacing: 0; }
+    .metric-value small { font-size: 13px; color: var(--mist); letter-spacing: 0; }
+    .metric-foot { color: var(--mist); font-size: 11px; }
+    .status-dot { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: var(--status); box-shadow: 0 0 10px var(--status); }
+    .card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .card-header h2 { margin: 0; font-size: 16px; font-weight: 700; }
+    .card-header .meta { color: var(--cream); opacity: .72; font-size: 11px; }
+    .action { grid-column: span 1; min-height: 156px; display: flex; flex-direction: column; justify-content: space-between; background: radial-gradient(ellipse at 50% 110%, rgba(29,139,148,.8), transparent 43%), var(--teal); }
+    .action p { max-width: 360px; margin-bottom: 6px; color: var(--cream); opacity: .8; font-size: 12px; line-height: 1.45; }
+    .action button { align-self: flex-start; padding: 11px 18px; color: var(--ink); background: var(--cream); border: 0; border-radius: 22px; cursor: pointer; font-size: 12px; font-weight: 600; box-shadow: 0 8px 22px rgba(4,34,43,.45); transition: .2s ease; }
+    .action button:hover { transform: translateY(-2px); background: var(--mist); }
+    .result { min-height: 20px; margin-top: 6px; color: var(--cream); font-size: 11px; }
+    .health-card { grid-column: span 2; min-height: 156px; }
+    .health-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
+    .health-item { display: flex; justify-content: space-between; gap: 14px; padding: 8px 0; border-bottom: 1px solid rgba(226,244,240,.14); color: var(--mist); font-size: 12px; }
+    .health-item strong { color: var(--cream); font-weight: 500; }
+    .health-ok { color: var(--aqua) !important; }
+    .chart-card { grid-column: 1 / -1; padding: 13px; }
+    .chart-wrap { position: relative; height: 120px; margin-top: 4px; }
+    .chart-note { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 16px; color: var(--cream); opacity: .65; font-size: 10px; }
+    .chart-note span:last-child { text-align: right; }
+    .chart-explainer { margin: 9px 0 0; padding-top: 8px; border-top: 1px solid rgba(226,244,240,.14); color: var(--cream); opacity: .82; font-size: 11px; line-height: 1.45; }
+    .chart-explainer strong { color: var(--mist); font-weight: 600; }
+    .sample-note { margin: 6px 0 0; color: var(--mist); opacity: .78; font-size: 10px; line-height: 1.4; }
+    @media (max-width: 900px) { .shell { grid-template-columns: 180px 1fr; } .surface { padding: 28px 28px 34px; } }
+    @media (max-width: 900px) { .health-card { grid-column: span 2; } }
+    @media (max-width: 650px) { .shell { display: block; } .rail { padding: 18px 14px; } .rail .nav { display: block; } .rail .nav-link { display: none; } .rail .nav-link.active { display: flex; } .surface { padding: 28px 16px 36px; } .model-selector { grid-template-columns: 1fr; } .dashboard-grid { grid-template-columns: 1fr; } .chart-card, .health-card { grid-column: auto; } .action { grid-column: auto; min-height: 215px; } .health-grid { grid-template-columns: 1fr; } .chart-wrap { height: 200px; } .chart-note { grid-template-columns: 1fr; gap: 4px; } .chart-note span:last-child { text-align: left; } }
   </style>
 </head>
-<body class="min-h-screen p-6 antialiased">
-  <div class="max-w-6xl mx-auto space-y-6">
-    
-    <!-- Header -->
-    <header class="flex items-center justify-between pb-4 border-b border-slate-800">
+<body>
+  <div class="shell">
+    <aside class="rail">
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight text-white">Model Telemetry</h1>
-        <p class="text-sm text-slate-400 mt-1">Real-time inference monitoring & diagnostics</p>
+        <div class="brand"><span>Model-Monitoring-Dashboard</span></div>
+        <nav class="nav" aria-label="Main navigation">
+          <a class="nav-link active" href="#overview"><span>Dashboard</span></a>
+        </nav>
       </div>
-      <div class="flex items-center space-x-2">
-        <span class="relative flex h-3 w-3">
-          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-          <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-        </span>
-        <span class="text-sm font-medium text-emerald-400">System Healthy</span>
-      </div>
-    </header>
-
-    <!-- Metrics Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="glass-panel rounded-xl p-6 shadow-lg">
-        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Total Requests</h3>
-        <div class="text-4xl text-white tech-font" id="stat-requests">0</div>
-      </div>
-      
-      <div class="glass-panel rounded-xl p-6 shadow-lg">
-        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Avg Latency</h3>
-        <div class="text-4xl text-cyan-400 tech-font" id="stat-latency">0.0<span class="text-lg text-slate-500 ml-1">ms</span></div>
-      </div>
-
-      <div class="glass-panel rounded-xl p-6 shadow-lg flex flex-col justify-center">
-        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Manual Override</h3>
-        <button id="predict-btn" onclick="sendPrediction()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium py-2.5 px-4 rounded transition-colors duration-200">
-          Inject Test Payload
-        </button>
-        <div id="predict-result" class="mt-2 text-xs text-slate-400 tech-font h-4"></div>
-      </div>
-    </div>
-
-    <!-- Chart Section -->
-    <div class="glass-panel rounded-xl p-6 shadow-lg">
-      <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Live Prediction Stream</h3>
-      <div class="w-full h-64">
-        <canvas id="predictionChart"></canvas>
-      </div>
-    </div>
-
+    </aside>
+    <main class="surface" id="overview">
+      <header class="topbar"><div><p class="eyebrow">LIVE MODEL MONITORING</p><h1>Model-Monitoring-Dashboard</h1><p class="subtitle">Compare quality, errors, predictions, and infrastructure health across three models.</p></div></header>
+      <div class="model-selector" id="model-selector" aria-label="Select model"></div>
+      <section class="dashboard-grid">
+        <article class="card metric card-pad"><div class="label">Accuracy</div><div class="metric-value mono" id="stat-accuracy">--</div><div class="metric-foot" id="metric-accuracy-note">labeled requests only</div></article>
+        <article class="card metric card-pad"><div class="label">F1-Score</div><div class="metric-value mono" id="stat-f1">--</div><div class="metric-foot">macro average across classes</div></article>
+        <article class="card metric card-pad"><div class="label">Error Count</div><div class="metric-value mono" id="stat-errors">0</div><div class="metric-foot">failed, invalid, or missing</div></article>
+        <article class="card metric card-pad"><div class="label">Precision</div><div class="metric-value mono" id="stat-precision">--</div><div class="metric-foot">false-alarm control</div></article>
+        <article class="card metric card-pad"><div class="label">Recall</div><div class="metric-value mono" id="stat-recall">--</div><div class="metric-foot">missed-case control</div></article>
+        <article class="card metric card-pad"><div class="label">Model Requests</div><div class="metric-value mono" id="stat-requests">0</div><div class="metric-foot" id="metric-requests-note">selected model traffic</div></article>
+        <article class="card action card-pad"><div><div class="card-header"><h2>Run a labeled prediction</h2><span class="meta mono" id="selected-model-meta">MODEL 1</span></div><p id="prediction-help">Send a known sample through the selected classifier to update its quality metrics.</p><p class="sample-note">Optional demo action: one click sends one labeled sample, records its prediction and latency, and updates this model's graph and quality scores.</p></div><div><button id="predict-btn" onclick="sendPrediction()">Send sample inference</button><div id="predict-result" class="result mono" aria-live="polite"></div></div></article>
+        <article class="card health-card card-pad"><div class="card-header"><h2>System health</h2><span class="meta mono" id="health-status">Checking</span></div><div class="health-grid"><div class="health-item"><span>CPU usage</span><strong class="mono" id="health-cpu">--</strong></div><div class="health-item"><span>RAM usage</span><strong class="mono" id="health-memory">--</strong></div><div class="health-item"><span>API uptime</span><strong class="mono" id="health-uptime">--</strong></div><div class="health-item"><span>Response speed</span><strong class="mono" id="health-latency">--</strong></div></div></article>
+        <article class="card chart-card"><div class="card-header"><h2>Recent predictions</h2><span class="meta mono" id="chart-meta">Selected model output</span></div><div class="chart-wrap"><canvas id="predictionChart"></canvas></div><div class="chart-note mono"><span>request history</span><span id="chart-classes">model classes</span></div><p class="chart-explainer"><strong>What this graph shows:</strong> each point is one recent request to the selected model. The <strong>x-axis</strong> is request order, from oldest to newest. The <strong>y-axis</strong> is the class predicted by the model. It shows output patterns and class concentration; use the Accuracy, Precision, Recall, and F1 cards above to judge correctness.</p></article>
+      </section>
+    </main>
   </div>
-
   <script>
-    // Chart.js dark mode configuration
-    Chart.defaults.color = '#64748b';
-    Chart.defaults.font.family = "'JetBrains Mono', monospace";
-    
-    const ctx = document.getElementById('predictionChart').getContext('2d');
-    
-    // Create gradient for the line chart
-    let gradient = ctx.createLinearGradient(0, 0, 0, 400);
-    gradient.addColorStop(0, 'rgba(6, 182, 212, 0.5)'); // Cyan
-    gradient.addColorStop(1, 'rgba(6, 182, 212, 0.0)');
-
-    const predictionChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Class Output',
-          data: [],
-          borderColor: '#06b6d4',
-          backgroundColor: gradient,
-          borderWidth: 2,
-          pointBackgroundColor: '#0f172a',
-          pointBorderColor: '#06b6d4',
-          pointBorderWidth: 2,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          fill: true,
-          tension: 0.4
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false }
-        },
-        scales: { 
-          y: { 
-            min: 0, 
-            max: 2, 
-            ticks: { stepSize: 1, color: '#94a3b8' },
-            grid: { color: 'rgba(255, 255, 255, 0.05)' }
-          },
-          x: {
-            grid: { display: false },
-            ticks: { color: '#94a3b8' }
-          }
-        }
-      }
-    });
-
-    async function fetchMetrics() {
-      try {
-        const res = await fetch('/api/metrics');
-        const data = await res.json();
-        
-        document.getElementById('stat-requests').innerText = data.total_requests;
-        document.getElementById('stat-latency').innerHTML = `${data.average_latency_ms}<span class="text-lg text-slate-500 ml-1">ms</span>`;
-        
-        predictionChart.data.labels = data.recent_predictions.map((_, i) => `REQ-${String(i + 1).padStart(2, '0')}`);
-        predictionChart.data.datasets[0].data = data.recent_predictions;
-        predictionChart.update();
-      } catch (err) {
-        console.error('Telemetry error:', err);
-      }
-    }
-
-    async function sendPrediction() {
-      const sampleFeatures = {
-        sepal_length: (Math.random() * 3 + 4).toFixed(1),
-        sepal_width: (Math.random() * 2 + 2).toFixed(1),
-        petal_length: (Math.random() * 4 + 1).toFixed(1),
-        petal_width: (Math.random() * 2 + 0.1).toFixed(1)
-      };
-
-      const res = await fetch('/predict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sampleFeatures)
-      });
-      const data = await res.json();
-      document.getElementById('predict-result').innerText = `Class: ${data.prediction} | Lat: ${data.latency_ms}ms`;
-      fetchMetrics();
-    }
-
+    Chart.defaults.color = '#98d8d0'; Chart.defaults.font.family = "'DM Mono', monospace";
+    const ctx = document.getElementById('predictionChart').getContext('2d'); const gradient = ctx.createLinearGradient(0, 0, 0, 260); gradient.addColorStop(0, 'rgba(79,184,180,.4)'); gradient.addColorStop(1, 'rgba(79,184,180,0)');
+    const predictionChart = new Chart(ctx, { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#4fb8b4', backgroundColor: gradient, borderWidth: 2, pointBackgroundColor: '#e2f4f0', pointBorderColor: '#1d8b94', pointBorderWidth: 2, pointRadius: 3, fill: true, tension: .42 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 350 }, plugins: { legend: { display: false }, tooltip: { displayColors: false, backgroundColor: '#0a3d4a', titleColor: '#e2f4f0', bodyColor: '#04222b', padding: 10 } }, scales: { y: { min: 0, max: 2, ticks: { stepSize: 1, color: '#98d8d0', padding: 8 }, grid: { color: 'rgba(226,244,240,.18)' }, border: { display: false } }, x: { grid: { display: false }, ticks: { color: '#98d8d0', maxTicksLimit: 8 }, border: { display: false } } } } });
+    predictionChart.options.scales.x.title = { display: true, text: 'Request order (oldest to newest)', color: '#98d8d0', font: { family: "'Manrope', sans-serif", size: 12 } };
+    predictionChart.options.scales.y.title = { display: true, text: 'Predicted class label', color: '#98d8d0', font: { family: "'Manrope', sans-serif", size: 12 } };
+    predictionChart.update();
+    let modelCatalog = {};
+    let selectedModelId = 'model_1';
+    function formatPercent(value) { return value === null || value === undefined ? '--' : `${(value * 100).toFixed(1)}%`; }
+    function formatUptime(seconds) { const hours = Math.floor(seconds / 3600); const minutes = Math.floor((seconds % 3600) / 60); const remainingSeconds = Math.floor(seconds % 60); return `${hours}h ${minutes}m ${remainingSeconds}s`; }
+    function renderModelSelector() { const selector = document.getElementById('model-selector'); selector.innerHTML = Object.values(modelCatalog).map((model, index) => `<button class="model-option${model.id === selectedModelId ? ' active' : ''}" data-model-id="${model.id}"><strong>Model ${index + 1}: ${model.name}</strong><span>${model.dataset} / ${model.feature_count} features / ${model.class_count} classes</span></button>`).join(''); selector.querySelectorAll('.model-option').forEach(button => button.addEventListener('click', () => { selectedModelId = button.dataset.modelId; renderModelSelector(); fetchMetrics(); })); }
+    async function loadModels() { const res = await fetch('/api/models'); const data = await res.json(); modelCatalog = Object.fromEntries(data.models.map(model => [model.id, model])); renderModelSelector(); }
+    async function fetchMetrics() { try { const res = await fetch('/api/metrics'); const data = await res.json(); const selected = data.models[selectedModelId]; const quality = selected.quality; const errors = selected.errors; const health = data.system_health; document.getElementById('stat-accuracy').innerText = formatPercent(quality.accuracy); document.getElementById('stat-precision').innerText = formatPercent(quality.precision); document.getElementById('stat-recall').innerText = formatPercent(quality.recall); document.getElementById('stat-f1').innerText = formatPercent(quality.f1_score); document.getElementById('stat-errors').innerText = errors.total; document.getElementById('stat-requests').innerText = selected.total_requests; document.getElementById('metric-accuracy-note').innerText = `${quality.evaluated_requests} labeled requests`; document.getElementById('metric-requests-note').innerText = `${selected.dataset} traffic`; document.getElementById('selected-model-meta').innerText = selected.id.toUpperCase(); document.getElementById('prediction-help').innerText = `Send a known ${selected.dataset} sample through this classifier to update its quality metrics.`; document.getElementById('chart-meta').innerText = `${selected.name} output`; document.getElementById('chart-classes').innerText = `${selected.class_count} classes`; document.getElementById('health-cpu').innerText = `${health.cpu_percent.toFixed(1)}%`; document.getElementById('health-memory').innerText = `${health.memory_percent.toFixed(1)}%`; document.getElementById('health-uptime').innerText = formatUptime(health.uptime_seconds); document.getElementById('health-latency').innerText = `${selected.average_latency_ms.toFixed(2)}ms`; const healthStatus = document.getElementById('health-status'); healthStatus.innerText = health.api_status; healthStatus.classList.toggle('health-ok', health.api_status === 'Operational'); predictionChart.options.scales.y.max = Math.max(1, selected.class_count - 1); predictionChart.data.labels = selected.recent_predictions.map((_, i) => `#${i + 1}`); predictionChart.data.datasets[0].data = selected.recent_predictions; predictionChart.update(); } catch (err) { document.getElementById('health-status').innerText = 'Unavailable'; console.error('Telemetry error:', err); } }
+    async function sendPrediction() { const button = document.getElementById('predict-btn'); button.disabled = true; const selected = modelCatalog[selectedModelId]; const sample = selected.samples[Math.floor(Math.random() * selected.samples.length)]; try { const res = await fetch('/predict', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_id: selectedModelId, features: sample.features, actual_class: sample.actual_class }) }); const data = await res.json(); document.getElementById('predict-result').innerText = data.prediction === undefined ? 'Inference failed' : `Class: ${data.prediction}  |  Lat: ${data.latency_ms}ms`; await fetchMetrics(); } catch (err) { document.getElementById('predict-result').innerText = 'Inference unavailable'; } finally { button.disabled = false; } }
+    loadModels().then(fetchMetrics);
     setInterval(fetchMetrics, 2000);
-    fetchMetrics();
   </script>
 </body>
 </html>

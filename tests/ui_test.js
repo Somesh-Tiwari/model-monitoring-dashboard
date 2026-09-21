@@ -18,6 +18,12 @@ async function runUITest() {
         console.log("Navigating to dashboard...");
         await driver.get('http://localhost:8000/');
 
+        console.log("Waiting for all monitored models...");
+        await driver.wait(async () => {
+            const modelButtons = await driver.findElements(By.css('.model-option'));
+            return modelButtons.length === 3;
+        }, 5000);
+
         console.log("Finding the prediction button...");
         let predictBtn = await driver.findElement(By.id('predict-btn'));
         
