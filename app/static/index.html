@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Model Monitoring Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta17/dist/css/tabler.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-light">
+  <div class="page">
+    <div class="container-xl py-4">
+      <h1 class="mb-4 text-primary">Model Monitoring Dashboard</h1>
+      
+      <!-- Metric Cards -->
+      <div class="row row-cards mb-4">
+        <div class="col-sm-6 col-lg-4">
+          <div class="card card-sm">
+            <div class="card-body">
+              <div class="subheader">Total Inference Requests</div>
+              <div class="h1 mb-0" id="stat-requests">0</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+          <div class="card card-sm">
+            <div class="card-body">
+              <div class="subheader">Average Latency</div>
+              <div class="h1 mb-0" id="stat-latency">0.0 ms</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+          <div class="card card-sm">
+            <div class="card-body">
+              <div class="subheader">Model Status</div>
+              <div class="h1 mb-0 text-success" id="stat-status">Healthy</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls & Chart -->
+      <div class="row row-cards">
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Simulate Model Prediction</h3>
+            </div>
+            <div class="card-body">
+              <p class="text-muted">Send a sample request to the model to update metrics in real time.</p>
+              <button id="predict-btn" class="btn btn-primary" onclick="sendPrediction()">Send Sample Inference Request</button>
+              <div id="predict-result" class="mt-3 text-secondary"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Recent Predictions Stream</h3>
+            </div>
+            <div class="card-body">
+              <canvas id="predictionChart" height="150"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ctx = document.getElementById('predictionChart').getContext('2d');
+    const predictionChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Predicted Class ID',
+          data: [],
+          borderColor: '#206bc4',
+          backgroundColor: 'rgba(32, 107, 196, 0.1)',
+          fill: true,
+          tension: 0.3
+        }]
+      },
+      options: {
+        scales: { y: { min: 0, max: 2, ticks: { stepSize: 1 } } }
+      }
+    });
+
+    async function fetchMetrics() {
+      try {
+        const res = await fetch('/api/metrics');
+        const data = await res.json();
+        
+        document.getElementById('stat-requests').innerText = data.total_requests;
+        document.getElementById('stat-latency').innerText = `${data.average_latency_ms} ms`;
+        
+        predictionChart.data.labels = data.recent_predictions.map((_, i) => `#${i + 1}`);
+        predictionChart.data.datasets[0].data = data.recent_predictions;
+        predictionChart.update();
+      } catch (err) {
+        console.error('Error fetching telemetry:', err);
+      }
+    }
+
+    async function sendPrediction() {
+      const sampleFeatures = {
+        sepal_length: (Math.random() * 3 + 4).toFixed(1),
+        sepal_width: (Math.random() * 2 + 2).toFixed(1),
+        petal_length: (Math.random() * 4 + 1).toFixed(1),
+        petal_width: (Math.random() * 2 + 0.1).toFixed(1)
+      };
+
+      const res = await fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sampleFeatures)
+      });
+      const data = await res.json();
+      document.getElementById('predict-result').innerText = `Class: ${data.prediction} | Latency: ${data.latency_ms} ms`;
+      fetchMetrics();
+    }
+
+    setInterval(fetchMetrics, 2000);
+    fetchMetrics();
+  </script>
+</body>
+</html>
