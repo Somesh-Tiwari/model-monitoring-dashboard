@@ -47,6 +47,7 @@ async function runUITest() {
 
     } catch (error) {
         console.error(`Test Failed: ${error}`);
+        process.exitCode = 1;
     } finally {
         await driver.quit();
     }

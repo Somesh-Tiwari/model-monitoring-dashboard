@@ -4,3 +4,4 @@ scikit-learn
 joblib
 pydantic
 psutil
+python-multipart

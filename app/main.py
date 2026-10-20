@@ -1,10 +1,12 @@
 import math
 import os
 import time
+import csv
+import io
 from typing import Any
 
 import psutil
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -13,7 +15,11 @@ from sklearn.datasets import load_breast_cancer, load_digits, load_wine
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
-app = FastAPI(title="Model Monitoring API")
+app = FastAPI(
+    title="Model Monitoring API",
+    description="Inference, dataset registration, and live monitoring for classification models.",
+    version="1.0.0",
+)
 started_at = time.monotonic()
 
 DATASET_DEFINITIONS = {
@@ -62,6 +68,63 @@ def build_model_registry() -> dict[str, dict[str, Any]]:
 
 models = build_model_registry()
 global_errors = {"total": 0, "missing_values": 0}
+
+
+def register_uploaded_dataset(filename: str, target_column: str, content: bytes) -> dict[str, Any]:
+    """Validate a labeled numeric CSV and register a trained classifier."""
+    try:
+        text = content.decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(text))
+        headers = reader.fieldnames or []
+        if target_column not in headers:
+            raise ValueError(f"Target column '{target_column}' was not found")
+        feature_columns = [column for column in headers if column != target_column]
+        if not feature_columns:
+            raise ValueError("The CSV must include at least one feature column")
+        rows = list(reader)
+        if len(rows) < 4:
+            raise ValueError("Upload at least four labeled rows")
+        features, labels = [], []
+        for line_number, row in enumerate(rows, start=2):
+            if any(row.get(column) is None or not row[column].strip() for column in headers):
+                raise ValueError(f"Row {line_number} contains an empty value")
+            numeric_features = [float(row[column]) for column in feature_columns]
+            if any(not math.isfinite(value) for value in numeric_features):
+                raise ValueError(f"Row {line_number} contains a non-finite feature")
+            features.append(numeric_features)
+            label = row[target_column].strip()
+            labels.append(label)
+        classes = sorted(set(labels))
+        if len(classes) < 2:
+            raise ValueError("The target column must contain at least two classes")
+        if len(classes) > 100:
+            raise ValueError("The target column may contain no more than 100 classes")
+        class_to_id = {label: index for index, label in enumerate(classes)}
+        encoded_labels = [class_to_id[label] for label in labels]
+        classifier = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
+        classifier.fit(features, encoded_labels)
+    except (UnicodeDecodeError, csv.Error, ValueError, TypeError) as error:
+        raise HTTPException(status_code=400, detail=f"Invalid dataset: {error}") from error
+
+    model_id = "custom_" + str(int(time.time() * 1000))
+    display_name = os.path.splitext(os.path.basename(filename or "dataset.csv"))[0].replace("_", " ").title()
+    samples_by_class = {}
+    for row_features, label in zip(features, encoded_labels):
+        samples_by_class.setdefault(label, {"actual_class": label, "features": row_features})
+    model = {
+        "id": model_id,
+        "name": f"{display_name} Classifier",
+        "dataset": display_name,
+        "model": classifier,
+        "labels": list(range(len(classes))),
+        "feature_count": len(feature_columns),
+        "feature_names": feature_columns,
+        "class_names": classes,
+        "samples": list(samples_by_class.values()),
+        "metrics": create_model_metrics(),
+    }
+    models[model_id] = model
+    return public_model(model)
 
 
 class PredictionRequest(BaseModel):
@@ -149,12 +212,25 @@ def public_model(model: dict[str, Any]) -> dict[str, Any]:
         "feature_count": model["feature_count"],
         "class_count": len(model["labels"]),
         "samples": model["samples"],
+        "feature_names": model.get("feature_names", []),
+        "class_names": model.get("class_names", [str(label) for label in model["labels"]]),
     }
 
 
 @app.get("/api/models")
 def get_models():
     return {"models": [public_model(model) for model in models.values()]}
+
+
+@app.post("/api/models/upload", status_code=201, summary="Train and register a model from CSV")
+async def upload_dataset(file: UploadFile = File(...), target_column: str = Form(...)):
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Upload a .csv file")
+    content = await file.read(10 * 1024 * 1024 + 1)
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="CSV files must be 10 MB or smaller")
+    model = register_uploaded_dataset(file.filename, target_column, content)
+    return {"model": model, "message": "Dataset trained and model registered"}
 
 
 @app.get("/api/metrics")
