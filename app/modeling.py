@@ -1,6 +1,7 @@
 """Fixed FPL player snapshot, held-out split, and total-points regressor."""
 
 import csv
+import statistics
 from pathlib import Path
 
 import pandas as pd
@@ -26,6 +27,26 @@ NUMERIC_FEATURES = [
 FEATURE_NAMES = CATEGORICAL_FEATURES + NUMERIC_FEATURES
 SPLIT_RANDOM_STATE = 42
 REPORT_SAMPLE_SIZE = 12
+
+
+def _load_point_band_thresholds():
+    with DATASET_PATH.open(newline="", encoding="utf-8-sig") as source:
+        points = [float(row[TARGET_NAME]) for row in csv.DictReader(source) if row.get(TARGET_NAME)]
+    lower, upper = statistics.quantiles(points, n=3, method="inclusive")
+    return float(lower), float(upper)
+
+
+# Fixed tiers derived from the target distribution of this one fixed dataset.
+POINT_BAND_THRESHOLDS = _load_point_band_thresholds()
+POINT_BAND_NAMES = ["Lower points", "Middle points", "Higher points"]
+
+
+def point_band(value):
+    if value <= POINT_BAND_THRESHOLDS[0]:
+        return POINT_BAND_NAMES[0]
+    if value <= POINT_BAND_THRESHOLDS[1]:
+        return POINT_BAND_NAMES[1]
+    return POINT_BAND_NAMES[2]
 
 
 def load_split():

@@ -12,9 +12,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, mean_squared_error, precision_score, r2_score, recall_score
 
-from app.modeling import DATASET_NAME, FEATURE_NAMES, TARGET_NAME, load_split, model_matches_dataset, train_model
+from app.modeling import DATASET_NAME, FEATURE_NAMES, TARGET_NAME, load_split, model_matches_dataset, point_band, train_model
 
 app = FastAPI(
     title="Fantasy Player Points Monitoring API",
@@ -45,7 +45,13 @@ def load_production_model():
 
 production_model = load_production_model()
 initial_test_predictions = production_model.predict(TEST_FEATURES)
+initial_actual_bands = [point_band(value) for value in TEST_POINTS]
+initial_predicted_bands = [point_band(value) for value in initial_test_predictions]
 INITIAL_TEST_METRICS = {
+    "accuracy": round(float(accuracy_score(initial_actual_bands, initial_predicted_bands)), 4),
+    "precision": round(float(precision_score(initial_actual_bands, initial_predicted_bands, average="macro", zero_division=0)), 4),
+    "recall": round(float(recall_score(initial_actual_bands, initial_predicted_bands, average="macro", zero_division=0)), 4),
+    "f1_score": round(float(f1_score(initial_actual_bands, initial_predicted_bands, average="macro", zero_division=0)), 4),
     "mae": round(float(mean_absolute_error(TEST_POINTS, initial_test_predictions)), 3),
     "rmse": round(float(mean_squared_error(TEST_POINTS, initial_test_predictions) ** 0.5), 3),
     "r2_score": round(float(r2_score(TEST_POINTS, initial_test_predictions)), 4),
@@ -155,6 +161,10 @@ def get_metrics():
             "recent_predictions": metrics["recent_predictions"],
             "errors": metrics["errors"],
             "quality": {
+                "accuracy": quality.get("accuracy"),
+                "precision": quality.get("precision"),
+                "recall": quality.get("recall"),
+                "f1_score": quality.get("f1_score"),
                 "mae": quality.get("mae"),
                 "rmse": quality.get("rmse"),
                 "r2_score": quality.get("r2_score"),

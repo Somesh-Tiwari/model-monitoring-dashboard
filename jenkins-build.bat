@@ -26,7 +26,7 @@ echo Checking Python syntax...
 .venv\Scripts\python.exe -m py_compile app\main.py app\modeling.py app\retrain.py app\train.py app\promote.py app\mark_deployed.py
 if errorlevel 1 exit /b 1
 
-echo Retraining and comparing production and candidate FPL points models on fixed validation and test splits...
+echo Retraining and comparing production and candidate points-tier accuracy on fixed validation and test splits...
 .venv\Scripts\python.exe -m app.retrain
 if errorlevel 1 exit /b 1
 
@@ -45,7 +45,7 @@ if /I not "%DEPLOY_APPROVED%"=="true" goto deployment_skipped
 set "IMAGE_TAG=%BUILD_NUMBER%"
 if not defined IMAGE_TAG set "IMAGE_TAG=local"
 
-echo Candidate passed the MAE gate. Building Docker image model-dashboard:%IMAGE_TAG%...
+echo Candidate passed the accuracy gate. Building Docker image model-dashboard:%IMAGE_TAG%...
 "%DOCKER_EXE%" build -t model-dashboard:%IMAGE_TAG% .
 if errorlevel 1 exit /b 1
 "%DOCKER_EXE%" tag model-dashboard:%IMAGE_TAG% model-dashboard:latest
@@ -90,7 +90,7 @@ echo Deployment approved and available at http://localhost:8000
 goto build_complete
 
 :deployment_skipped
-echo Candidate MAE did not meet the production threshold. Production model and running container were retained.
+echo Candidate accuracy did not meet the production threshold. Production model and running container were retained.
 echo Jenkins comparison report has been saved to the dashboard monitoring volume.
 
 :build_complete

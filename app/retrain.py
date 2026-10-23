@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import joblib
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, mean_squared_error, precision_score, r2_score, recall_score
 
 from app.modeling import (
     DATASET_NAME,
@@ -15,6 +15,7 @@ from app.modeling import (
     SPLIT_RANDOM_STATE,
     load_split,
     model_matches_dataset,
+    point_band,
     train_model,
 )
 
@@ -36,7 +37,13 @@ ACTIVE_VERSION_PATH = ARTIFACT_DIR / "production-version.json"
 
 def score(model, x_suite, y_suite, players):
     predictions = [float(value) for value in model.predict(x_suite)]
+    actual_bands = [point_band(value) for value in y_suite]
+    predicted_bands = [point_band(value) for value in predictions]
     metrics = {
+        "accuracy": round(float(accuracy_score(actual_bands, predicted_bands)), 4),
+        "precision": round(float(precision_score(actual_bands, predicted_bands, average="macro", zero_division=0)), 4),
+        "recall": round(float(recall_score(actual_bands, predicted_bands, average="macro", zero_division=0)), 4),
+        "f1_score": round(float(f1_score(actual_bands, predicted_bands, average="macro", zero_division=0)), 4),
         "mae": round(float(mean_absolute_error(y_suite, predictions)), 3),
         "rmse": round(float(mean_squared_error(y_suite, predictions) ** 0.5), 3),
         "r2_score": round(float(r2_score(y_suite, predictions)), 4),
@@ -48,6 +55,8 @@ def score(model, x_suite, y_suite, players):
             "player_name": players[index]["name"],
             "actual_total_points": round(float(y_suite[index]), 2),
             "predicted_total_points": round(predictions[index], 2),
+            "actual_points_band": actual_bands[index],
+            "predicted_points_band": predicted_bands[index],
             "absolute_error": round(abs(float(y_suite[index]) - predictions[index]), 2),
         }
         for index in range(min(REPORT_SAMPLE_SIZE, len(y_suite)))
@@ -93,7 +102,7 @@ def main():
     candidate_validation, _ = score(candidate_model, x_validation, y_validation, validation_players)
     previous_metrics, previous_inputs = score(previous_model, x_test, y_test, test_players)
     candidate_metrics, candidate_inputs = score(candidate_model, x_test, y_test, test_players)
-    approved = candidate_validation["mae"] <= previous_validation["mae"]
+    approved = candidate_validation["accuracy"] >= previous_validation["accuracy"]
     report = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "dataset": DATASET_NAME,
@@ -102,8 +111,8 @@ def main():
         "decision": "deploy" if approved else "keep-production",
         "deployment_approved": approved,
         "deployment_status": "approved-pending-deployment" if approved else "production-retained",
-        "gate_metric": "mae",
-        "reason": "Candidate validation MAE is no higher than production. Final metrics are reported on a separate held-out test split." if approved else "Candidate validation MAE is higher than production; production was retained. Final test metrics are still recorded.",
+        "gate_metric": "accuracy",
+        "reason": "Candidate validation accuracy on the fixed points tiers meets or exceeds production. Numeric error metrics are reported on a separate held-out test split." if approved else "Candidate validation accuracy on the fixed points tiers is lower than production; production was retained. Final test metrics are still recorded.",
         "previous_production": {"version": previous_version, "validation_metrics": previous_validation, "metrics": previous_metrics, "inputs": previous_inputs},
         "candidate": {"version": candidate_version, "validation_metrics": candidate_validation, "metrics": candidate_metrics, "inputs": candidate_inputs},
     }
@@ -127,7 +136,7 @@ def main():
     if not approved:
         print("Deployment skipped: the existing production model remains active.")
         return 0
-    print("Deployment approved: candidate MAE meets the production gate.")
+    print("Deployment approved: candidate points-tier accuracy meets the production gate.")
     return 0
 
 

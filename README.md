@@ -8,7 +8,8 @@ A single-model FastAPI dashboard and Windows Jenkins workflow for estimating Fan
 - The regressor estimates `total_points` from `position`, `now_cost`, `minutes`, `starts`, `expected_goal_involvements`, `expected_goals`, and `expected_assists`. Cost uses the dataset's FPL scale (tenths of £1m).
 - It excludes `total_points` and direct point-scoring outcomes such as goals, assists, bonus, and clean sheets from the inputs.
 - The app creates deterministic, position-stratified training (70%), validation (15%), and test (15%) splits by player. Jenkins uses the full validation split for the deployment gate; test metrics are reported separately.
-- Regression monitoring reports MAE, RMSE, and R² on the full test split. Jenkins promotes only when candidate validation MAE is no higher than production validation MAE.
+- The dashboard reports Accuracy, macro Precision, macro Recall, and macro F1 by assigning numeric FPL points to lower, middle, or higher point tiers. Tier boundaries come from the fixed dataset's target distribution. Jenkins promotes only when candidate validation accuracy meets or exceeds production validation accuracy.
+- MAE, RMSE, and R² remain available as supplemental measures of numeric point-prediction error on the held-out test split.
 - This is a retrospective evaluation of one season snapshot. It does not measure week-ahead forecasting. That requires dated snapshots and later-week points as future labels.
 
 ## Run locally from source
@@ -54,6 +55,6 @@ set "DOCKER_EXE=C:\Users\Lenovo\AppData\Local\Programs\DockerDesktop\resources\b
 call jenkins-build.bat
 ```
 
-Change the executable paths to match your computer. The batch script installs dependencies, retrains and evaluates on the full fixed validation and test splits, and builds/runs the Docker image only when candidate validation MAE passes the production gate. Docker Hub publishing is optional and requires Jenkins credentials and repository settings.
+Change the executable paths to match your computer. The batch script installs dependencies, retrains and evaluates on the full fixed validation and test splits, and builds/runs the Docker image only when candidate validation accuracy across point tiers meets or exceeds production. Docker Hub publishing is optional and requires Jenkins credentials and repository settings.
 
 Jenkins stores its approved production model outside its disposable workspace at `%JENKINS_HOME%\model-dashboard\production.joblib`. Keep that file and the `model-dashboard-monitoring` Docker volume to retain model and report history. Artifacts from the former Wine and student-grade models are treated as incompatible with this dataset.
