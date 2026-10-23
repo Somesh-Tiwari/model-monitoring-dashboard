@@ -11,6 +11,6 @@ model_path = Path(__file__).resolve().parent / "artifacts" / "production.joblib"
 model_path.parent.mkdir(parents=True, exist_ok=True)
 joblib.dump(train_model(), model_path)
 model_path.with_name("production-version.json").write_text(
-    json.dumps({"version": "bootstrap-seed-42"}, indent=2), encoding="utf-8"
+    json.dumps({"version": "fpl-bootstrap-seed-42"}, indent=2), encoding="utf-8"
 )
-print(f"Saved fixed Wine production model to {model_path}")
+print(f"Saved FPL total-points model to {model_path}")

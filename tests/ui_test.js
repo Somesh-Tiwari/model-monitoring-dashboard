@@ -10,12 +10,12 @@ async function runUITest() {
         await driver.get('http://localhost:8000/');
         await driver.wait(async () => {
             const name = await driver.findElement(By.id('model-name')).getText();
-            return name === 'Wine Classifier';
+            return name === 'FPL Total Points Regressor';
         }, 10000);
 
         await driver.findElement(By.id('predict-btn')).click();
         const result = await driver.findElement(By.id('predict-result'));
-        await driver.wait(async () => (await result.getText()).startsWith('Predicted '), 10000);
+        await driver.wait(async () => (await result.getText()).includes('actual ') && (await result.getText()).includes('predicted ') && (await result.getText()).includes('pts'), 10000);
         console.log(`UI prediction succeeded: ${await result.getText()}`);
     } catch (error) {
         console.error(`UI check failed: ${error}`);

@@ -23,6 +23,9 @@
     .label { font-size:13px } .value { margin:8px 0 2px; font:600 25px 'DM Mono',monospace } .foot { font-size:11px }
     .action { min-height:150px; display:flex; flex-direction:column; justify-content:space-between; background:var(--teal) } .action p { max-width:400px; opacity:.82; font-size:12px; line-height:1.5 }
     .action button { align-self:flex-start; padding:10px 17px; color:var(--ink); background:var(--cream); border:0; border-radius:22px; font-weight:700 }
+    .marks-form { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:8px 0 }
+    .marks-form label { color:var(--mist); font-size:11px }
+    .marks-form input,.marks-form select { display:block; width:100%; margin-top:4px; padding:7px; border:1px solid var(--line); border-radius:7px; background:var(--ink); color:var(--cream) }
     .health { grid-column:span 2 } .health-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px 20px; margin-top:12px }
     .health-item { display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid rgba(226,244,240,.14); color:var(--mist); font-size:12px }
     .health-item strong { color:var(--cream); font-weight:500 } .chart-card,.deployment { grid-column:1/-1 }
@@ -40,45 +43,51 @@
   <div class="shell">
     <aside class="rail"><div class="brand">Model Monitoring Dashboard</div></aside>
     <main class="surface">
-      <header><p class="eyebrow">MODEL OPERATIONS</p><h1>Model Monitoring</h1><p class="subtitle">Live inference health and Jenkins retraining decisions for one fixed model.</p></header>
-      <section class="model-banner"><div><strong id="model-name">Loading model…</strong><span id="model-description">Fixed dataset: Wine</span></div><span class="decision" id="api-status">Checking API</span></section>
+      <header><p class="eyebrow">MODEL OPERATIONS</p><h1>Fantasy Player Points Monitoring</h1><p class="subtitle">Predictions, held-out performance, and Jenkins deployment decisions for one FPL dataset.</p></header>
+      <section class="model-banner"><div><strong id="model-name">Loading model…</strong><span id="model-description">Fixed dataset: FPL 2026–2027</span></div><span class="decision" id="api-status">Checking API</span></section>
       <section class="grid">
-        <article class="card metric"><div class="label">Evaluation accuracy</div><div class="value" id="accuracy">--</div><div class="foot" id="evaluation-count">Jenkins evaluation suite</div></article>
-        <article class="card metric"><div class="label">F1 score</div><div class="value" id="f1">--</div><div class="foot">macro average on fixed suite</div></article>
+        <article class="card metric"><div class="label">Held-out MAE</div><div class="value" id="mae">--</div><div class="foot" id="evaluation-count">Awaiting Jenkins comparison</div></article>
+        <article class="card metric"><div class="label">Held-out R²</div><div class="value" id="r2">--</div><div class="foot">score on the fixed player split</div></article>
         <article class="card metric"><div class="label">Inference errors</div><div class="value" id="errors">0</div><div class="foot">failed requests</div></article>
         <article class="card metric"><div class="label">Inference requests</div><div class="value" id="requests">0</div><div class="foot">since application started</div></article>
         <article class="card metric"><div class="label">Average latency</div><div class="value" id="latency">0 ms</div><div class="foot">prediction response time</div></article>
-        <article class="card action"><div><h2>Try a predefined input</h2><p>Runs the next fixed Wine test input. The expected target stays inside the application.</p></div><div><button id="predict-btn" onclick="sendPrediction()">Run sample prediction</button><div class="result mono" id="predict-result" aria-live="polite"></div></div></article>
-        <article class="card health"><div class="card-head"><h2>System health</h2><span class="meta mono" id="uptime">--</span></div><div class="health-grid"><div class="health-item"><span>CPU usage</span><strong id="cpu">--</strong></div><div class="health-item"><span>Memory usage</span><strong id="memory">--</strong></div><div class="health-item"><span>API status</span><strong id="health-status">--</strong></div><div class="health-item"><span>Model</span><strong>Wine classifier</strong></div></div></article>
-        <article class="card chart-card"><div class="card-head"><h2>Recent predictions</h2><span class="meta">Last 20 requests</span></div><div class="chart-wrap"><canvas id="predictionChart"></canvas></div></article>
-        <article class="card deployment"><div class="card-head"><h2>Latest Jenkins comparison</h2><span class="decision" id="deploy-decision">No report yet</span></div><table class="comparison"><thead><tr><th>Model version</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>Inputs</th></tr></thead><tbody><tr><td>Previous production</td><td id="old-accuracy">--</td><td id="old-precision">--</td><td id="old-recall">--</td><td id="old-f1">--</td><td id="old-count">--</td></tr><tr><td>Retrained candidate</td><td id="new-accuracy">--</td><td id="new-precision">--</td><td id="new-recall">--</td><td id="new-f1">--</td><td id="new-count">--</td></tr></tbody></table><p class="report-note" id="deploy-reason">Jenkins comparison results and deployment decision will appear here.</p><p class="report-note" id="per-input-results"></p></article>
+        <article class="card action"><div><h2>Predict total FPL points</h2><p>Enter the current player snapshot features. No actual points target is required.</p></div><div><form class="marks-form" onsubmit="predictPlayer(event)"><label>Position<select id="position"><option>GKP</option><option>DEF</option><option selected>MID</option><option>FWD</option></select></label><label>Cost ×10<input id="now-cost" type="number" min="0" max="300" value="75" required></label><label>Minutes<input id="minutes" type="number" min="0" max="6000" value="1200" required></label><label>Starts<input id="starts" type="number" min="0" max="100" value="14" required></label><label>Expected goal involvements<input id="xgi" type="number" min="0" step="0.01" value="5" required></label><label>Expected goals<input id="xg" type="number" min="0" step="0.01" value="3" required></label><label>Expected assists<input id="xa" type="number" min="0" step="0.01" value="2" required></label><button id="manual-predict-btn" type="submit">Predict points</button></form><div class="result mono" id="manual-result" aria-live="polite"></div></div></article>
+        <article class="card action"><div><h2>Compare actual vs predicted</h2><p>Runs one player from the fixed held-out split and compares the prediction with the dataset's actual total points.</p></div><div><button id="predict-btn" onclick="sendPrediction()">Evaluate held-out player</button><div class="result mono" id="predict-result" aria-live="polite"></div></div></article>
+        <article class="card health"><div class="card-head"><h2>System health</h2><span class="meta mono" id="uptime">--</span></div><div class="health-grid"><div class="health-item"><span>CPU usage</span><strong id="cpu">--</strong></div><div class="health-item"><span>Memory usage</span><strong id="memory">--</strong></div><div class="health-item"><span>API status</span><strong id="health-status">--</strong></div><div class="health-item"><span>Model</span><strong>FPL points regressor</strong></div></div></article>
+        <article class="card chart-card"><div class="card-head"><h2>Recent predicted total points</h2><span class="meta">Last 20 requests</span></div><div class="chart-wrap"><canvas id="predictionChart"></canvas></div></article>
+        <article class="card deployment" id="deployment-card" hidden><div class="card-head"><h2>Latest Jenkins comparison</h2><span class="decision" id="deploy-decision"></span></div><table class="comparison"><thead><tr><th>Model version</th><th>Validation MAE (gate)</th><th>Test MAE</th><th>Test RMSE</th><th>Test R²</th><th>Test players</th></tr></thead><tbody><tr><td>Previous production</td><td id="old-validation-mae">--</td><td id="old-mae">--</td><td id="old-rmse">--</td><td id="old-r2">--</td><td id="old-count">--</td></tr><tr><td>Retrained candidate</td><td id="new-validation-mae">--</td><td id="new-mae">--</td><td id="new-rmse">--</td><td id="new-r2">--</td><td id="new-count">--</td></tr></tbody></table><p class="report-note" id="deploy-reason"></p><p class="report-note" id="per-input-results"></p></article>
       </section>
     </main>
   </div>
   <script>
-    const chart = new Chart(document.getElementById('predictionChart'), {type:'line',data:{labels:[],datasets:[{label:'Predicted class',data:[],borderColor:'#4fb8b4',backgroundColor:'rgba(79,184,180,.2)',pointBackgroundColor:'#e2f4f0',borderWidth:2,tension:.3,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Request order'},ticks:{color:'#98d8d0'}},y:{title:{display:true,text:'Predicted class'},ticks:{stepSize:1,color:'#98d8d0'},grid:{color:'rgba(226,244,240,.12)'}}}}});
-    const pct = value => value == null ? '--' : `${(value*100).toFixed(1)}%`;
+    const chart = new Chart(document.getElementById('predictionChart'), {type:'line',data:{labels:[],datasets:[{label:'Predicted total points',data:[],borderColor:'#4fb8b4',backgroundColor:'rgba(79,184,180,.2)',pointBackgroundColor:'#e2f4f0',borderWidth:2,tension:.3,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Request order'},ticks:{color:'#98d8d0'}},y:{title:{display:true,text:'Total FPL points'},ticks:{color:'#98d8d0'},grid:{color:'rgba(226,244,240,.12)'}}}}});
+    const num = value => value == null ? '--' : Number(value).toFixed(2);
     const uptime = seconds => `${Math.floor(seconds/3600)}h ${Math.floor(seconds%3600/60)}m ${Math.floor(seconds%60)}s`;
     function renderReport(report) {
+      const card = document.getElementById('deployment-card');
+      card.hidden = !report;
       if (!report) return;
       const old = report.previous_production?.metrics || {}, candidate = report.candidate?.metrics || {};
       const deployed = report.deployment_status === 'deployed';
-      document.getElementById('deploy-decision').textContent = deployed ? 'Deployed' : (report.deployment_approved ? 'Accuracy gate passed' : 'Production retained');
+      document.getElementById('deploy-decision').textContent = deployed ? 'Deployed' : (report.deployment_approved ? 'MAE gate passed' : 'Production retained');
       document.getElementById('deploy-decision').className = `decision ${deployed ? 'approved' : (report.deployment_approved ? '' : 'rejected')}`;
       document.getElementById('deploy-reason').textContent = `${report.reason} · ${report.timestamp_utc || ''}`;
       for (const [prefix, values] of [['old',old],['new',candidate]]) {
-        for (const key of ['accuracy','precision','recall','f1_score']) document.getElementById(`${prefix}-${key === 'f1_score' ? 'f1' : key}`).textContent = pct(values[key]);
+        document.getElementById(`${prefix}-validation-mae`).textContent = num(values.validation_metrics?.mae);
+        document.getElementById(`${prefix}-mae`).textContent = num(values.mae);
+        document.getElementById(`${prefix}-rmse`).textContent = num(values.rmse);
+        document.getElementById(`${prefix}-r2`).textContent = num(values.r2_score);
         document.getElementById(`${prefix}-count`).textContent = values.evaluated_inputs ?? '--';
       }
       const inputs = candidate.inputs || [];
-      document.getElementById('per-input-results').textContent = inputs.length ? `Fixed input results: ${inputs.map(item => `${item.input_id} ${item.correct ? '✓' : '✗'}`).join(' · ')}` : '';
+      document.getElementById('per-input-results').textContent = inputs.length ? `Sample players (actual → predicted points): ${inputs.map(item => `${item.player_name} ${item.actual_total_points} → ${item.predicted_total_points} (error ${item.absolute_error})`).join(' · ')}` : '';
     }
     async function refresh() {
       try {
         const response = await fetch('/api/metrics'); if (!response.ok) throw new Error('Metrics unavailable');
         const data = await response.json(), model = data.model, health = data.system_health, q = model.quality;
         document.getElementById('model-name').textContent = model.name; document.getElementById('model-description').textContent = `Fixed dataset: ${model.dataset}`;
-        document.getElementById('accuracy').textContent = pct(q.accuracy); document.getElementById('f1').textContent = pct(q.f1_score); document.getElementById('evaluation-count').textContent = `${q.evaluated_inputs || 0} predefined test inputs`;
+        document.getElementById('mae').textContent = q.mae == null ? '--' : `${num(q.mae)} pts`; document.getElementById('r2').textContent = num(q.r2_score); document.getElementById('evaluation-count').textContent = q.evaluated_inputs ? `${q.evaluated_inputs} held-out players` : 'Awaiting Jenkins comparison';
         document.getElementById('errors').textContent = model.errors; document.getElementById('requests').textContent = model.total_requests; document.getElementById('latency').textContent = `${model.average_latency_ms.toFixed(2)} ms`;
         document.getElementById('cpu').textContent = `${health.cpu_percent.toFixed(1)}%`; document.getElementById('memory').textContent = `${health.memory_percent.toFixed(1)}%`; document.getElementById('uptime').textContent = uptime(health.uptime_seconds); document.getElementById('health-status').textContent = health.api_status; document.getElementById('api-status').textContent = health.api_status;
         chart.data.labels = model.recent_predictions.map((_,i) => `#${i+1}`); chart.data.datasets[0].data = model.recent_predictions; chart.update(); renderReport(data.deployment);
@@ -86,8 +95,29 @@
     }
     async function sendPrediction() {
       const button = document.getElementById('predict-btn'), output = document.getElementById('predict-result'); button.disabled = true; output.textContent = 'Running prediction…';
-      try { const response = await fetch('/api/demo-prediction',{method:'POST'}), data = await response.json(); if (!response.ok) throw new Error(data.detail || data.error || 'Prediction failed'); output.textContent = `Predicted ${data.prediction_label} · ${data.latency_ms} ms`; await refresh(); }
+      try { const response = await fetch('/api/demo-prediction',{method:'POST'}), data = await response.json(); if (!response.ok) throw new Error(data.detail || data.error || 'Prediction failed'); output.textContent = `${data.player_name}: actual ${data.actual_total_points} pts, predicted ${data.predicted_total_points} pts · absolute error ${data.absolute_error} · ${data.latency_ms} ms`; await refresh(); }
       catch(error) { output.textContent = error.message || 'Prediction unavailable'; } finally { button.disabled = false; }
+    }
+    async function predictPlayer(event) {
+      event.preventDefault();
+      const button = document.getElementById('manual-predict-btn'), output = document.getElementById('manual-result');
+      button.disabled = true; output.textContent = 'Predicting…';
+      const body = {
+        position: document.getElementById('position').value,
+        now_cost: Number(document.getElementById('now-cost').value),
+        minutes: Number(document.getElementById('minutes').value),
+        starts: Number(document.getElementById('starts').value),
+        expected_goal_involvements: Number(document.getElementById('xgi').value),
+        expected_goals: Number(document.getElementById('xg').value),
+        expected_assists: Number(document.getElementById('xa').value)
+      };
+      try {
+        const response = await fetch('/predict', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const data = await response.json(); if (!response.ok) throw new Error(data.detail || 'Prediction failed');
+        output.textContent = `Predicted ${data.predicted_total_points} total points · ${data.latency_ms} ms`;
+        await refresh();
+      } catch(error) { output.textContent = error.message || 'Prediction unavailable'; }
+      finally { button.disabled = false; }
     }
     refresh(); setInterval(refresh,2000);
   </script>

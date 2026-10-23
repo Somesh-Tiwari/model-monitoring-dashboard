@@ -1,4 +1,4 @@
-"""Train a candidate, compare it with production, and promote only on a pass."""
+"""Train a candidate, compare held-out point error with production, and gate deployment."""
 
 import json
 import os
@@ -7,9 +7,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import joblib
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-from app.modeling import DATASET_NAME, SPLIT_RANDOM_STATE, load_split, train_model
+from app.modeling import (
+    DATASET_NAME,
+    REPORT_SAMPLE_SIZE,
+    SPLIT_RANDOM_STATE,
+    load_split,
+    model_matches_dataset,
+    train_model,
+)
 
 APP_DIR = Path(__file__).resolve().parent
 ARTIFACT_DIR = APP_DIR / "artifacts"
@@ -27,23 +34,23 @@ PRODUCTION_VERSION_PATH = PRODUCTION_PATH.with_name("production-version.json")
 ACTIVE_VERSION_PATH = ARTIFACT_DIR / "production-version.json"
 
 
-def score(model, x_suite, y_suite, class_names):
-    predictions = model.predict(x_suite)
+def score(model, x_suite, y_suite, players):
+    predictions = [float(value) for value in model.predict(x_suite)]
     metrics = {
-        "accuracy": round(float(accuracy_score(y_suite, predictions)), 4),
-        "precision": round(float(precision_score(y_suite, predictions, average="macro", zero_division=0)), 4),
-        "recall": round(float(recall_score(y_suite, predictions, average="macro", zero_division=0)), 4),
-        "f1_score": round(float(f1_score(y_suite, predictions, average="macro", zero_division=0)), 4),
+        "mae": round(float(mean_absolute_error(y_suite, predictions)), 3),
+        "rmse": round(float(mean_squared_error(y_suite, predictions) ** 0.5), 3),
+        "r2_score": round(float(r2_score(y_suite, predictions)), 4),
         "evaluated_inputs": len(y_suite),
     }
     examples = [
         {
-            "input_id": f"wine-test-{index + 1}",
-            "expected_class": class_names[int(actual)],
-            "predicted_class": class_names[int(predicted)],
-            "correct": bool(actual == predicted),
+            "player_id": players[index]["id"],
+            "player_name": players[index]["name"],
+            "actual_total_points": round(float(y_suite[index]), 2),
+            "predicted_total_points": round(predictions[index], 2),
+            "absolute_error": round(abs(float(y_suite[index]) - predictions[index]), 2),
         }
-        for index, (actual, predicted) in enumerate(zip(y_suite, predictions))
+        for index in range(min(REPORT_SAMPLE_SIZE, len(y_suite)))
     ]
     return metrics, examples
 
@@ -56,14 +63,21 @@ def save_json(path: Path, data):
 
 
 def main():
-    _, _, x_suite, y_suite, _, class_names = load_split()
-    bootstrap = not PRODUCTION_PATH.exists()
+    _, _, x_validation, y_validation, x_test, y_test, _, validation_players, test_players = load_split()
+    previous_model = None
+    if PRODUCTION_PATH.exists():
+        try:
+            stored_model = joblib.load(PRODUCTION_PATH)
+            if model_matches_dataset(stored_model):
+                previous_model = stored_model
+        except (OSError, EOFError, ValueError):
+            previous_model = None
+    bootstrap = previous_model is None
     if bootstrap:
         previous_model = train_model(random_state=SPLIT_RANDOM_STATE)
-        previous_version = "bootstrap-seed-42"
+        previous_version = "fpl-bootstrap-seed-42"
         candidate_seed = SPLIT_RANDOM_STATE
     else:
-        previous_model = joblib.load(PRODUCTION_PATH)
         try:
             previous_version = json.loads(PRODUCTION_VERSION_PATH.read_text(encoding="utf-8"))["version"]
         except (OSError, json.JSONDecodeError, KeyError):
@@ -75,19 +89,23 @@ def main():
 
     candidate_version = f"build-{os.environ.get('BUILD_NUMBER', candidate_seed)}"
     candidate_model = train_model(random_state=candidate_seed)
-    previous_metrics, previous_inputs = score(previous_model, x_suite, y_suite, class_names)
-    candidate_metrics, candidate_inputs = score(candidate_model, x_suite, y_suite, class_names)
-    approved = candidate_metrics["accuracy"] >= previous_metrics["accuracy"]
+    previous_validation, _ = score(previous_model, x_validation, y_validation, validation_players)
+    candidate_validation, _ = score(candidate_model, x_validation, y_validation, validation_players)
+    previous_metrics, previous_inputs = score(previous_model, x_test, y_test, test_players)
+    candidate_metrics, candidate_inputs = score(candidate_model, x_test, y_test, test_players)
+    approved = candidate_validation["mae"] <= previous_validation["mae"]
     report = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "dataset": DATASET_NAME,
-        "evaluation_suite_size": len(y_suite),
+        "validation_size": len(y_validation),
+        "test_size": len(y_test),
         "decision": "deploy" if approved else "keep-production",
         "deployment_approved": approved,
         "deployment_status": "approved-pending-deployment" if approved else "production-retained",
-        "reason": "Candidate accuracy meets or exceeds production accuracy on the fixed evaluation suite." if approved else "Candidate accuracy is lower than production accuracy on the fixed evaluation suite; production was retained.",
-        "previous_production": {"version": previous_version, "metrics": previous_metrics, "inputs": previous_inputs},
-        "candidate": {"version": candidate_version, "metrics": candidate_metrics, "inputs": candidate_inputs},
+        "gate_metric": "mae",
+        "reason": "Candidate validation MAE is no higher than production. Final metrics are reported on a separate held-out test split." if approved else "Candidate validation MAE is higher than production; production was retained. Final test metrics are still recorded.",
+        "previous_production": {"version": previous_version, "validation_metrics": previous_validation, "metrics": previous_metrics, "inputs": previous_inputs},
+        "candidate": {"version": candidate_version, "validation_metrics": candidate_validation, "metrics": candidate_metrics, "inputs": candidate_inputs},
     }
 
     # Keep Jenkins' production copy and the model packaged into the image in sync only on approval.
@@ -96,7 +114,10 @@ def main():
         shutil.copy2(CANDIDATE_PATH, IMAGE_MODEL_PATH)
         active_version = candidate_version
     else:
-        shutil.copy2(PRODUCTION_PATH, IMAGE_MODEL_PATH)
+        if bootstrap:
+            joblib.dump(previous_model, IMAGE_MODEL_PATH)
+        else:
+            shutil.copy2(PRODUCTION_PATH, IMAGE_MODEL_PATH)
         active_version = previous_version
 
     save_json(ACTIVE_VERSION_PATH, {"version": active_version})
@@ -106,7 +127,7 @@ def main():
     if not approved:
         print("Deployment skipped: the existing production model remains active.")
         return 0
-    print("Deployment approved: candidate meets the production accuracy gate.")
+    print("Deployment approved: candidate MAE meets the production gate.")
     return 0
 
 
