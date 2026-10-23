@@ -1,52 +1,24 @@
-// tests/ui_test.js
 const { Builder, By, until } = require('selenium-webdriver');
 const chrome = require('selenium-webdriver/chrome');
 
 async function runUITest() {
-    // Configure Chrome to run headlessly (without opening a visible window)
-    let options = new chrome.Options();
-    options.addArguments('--headless');
-    options.addArguments('--disable-gpu');
-    options.addArguments('--no-sandbox');
-
-    let driver = await new Builder()
-        .forBrowser('chrome')
-        .setChromeOptions(options)
-        .build();
+    const options = new chrome.Options();
+    options.addArguments('--headless', '--disable-gpu', '--no-sandbox');
+    const driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
 
     try {
-        console.log("Navigating to dashboard...");
         await driver.get('http://localhost:8000/');
-
-        console.log("Waiting for all monitored models...");
         await driver.wait(async () => {
-            const modelButtons = await driver.findElements(By.css('.model-option'));
-            return modelButtons.length === 3;
-        }, 5000);
+            const name = await driver.findElement(By.id('model-name')).getText();
+            return name === 'Wine Classifier';
+        }, 10000);
 
-        console.log("Finding the prediction button...");
-        let predictBtn = await driver.findElement(By.id('predict-btn'));
-        
-        console.log("Clicking the button to simulate inference...");
-        await predictBtn.click();
-
-        console.log("Waiting for AI response...");
-        let resultTextElement = await driver.wait(
-            until.elementLocated(By.id('predict-result')), 
-            5000
-        );
-        
-        // Wait until the text actually populates
-        await driver.wait(async () => {
-            const text = await resultTextElement.getText();
-            return text.includes('Class:');
-        }, 5000);
-
-        let finalOutput = await resultTextElement.getText();
-        console.log(`Test Passed! Model responded with: ${finalOutput}`);
-
+        await driver.findElement(By.id('predict-btn')).click();
+        const result = await driver.findElement(By.id('predict-result'));
+        await driver.wait(async () => (await result.getText()).startsWith('Predicted '), 10000);
+        console.log(`UI prediction succeeded: ${await result.getText()}`);
     } catch (error) {
-        console.error(`Test Failed: ${error}`);
+        console.error(`UI check failed: ${error}`);
         process.exitCode = 1;
     } finally {
         await driver.quit();

@@ -1,27 +1,63 @@
 # Model Monitoring Dashboard
-AI DevOps pipeline project featuring FastAPI, Docker, Jenkins, and automated UI testing via Selenium.
 
-## Monitoring signals
+A single-model machine-learning demo with a FastAPI dashboard, fixed evaluation data, and a Windows Jenkins retraining/deployment pipeline.
 
-The dashboard reports live inference quality and system health through `/api/metrics`.
-The dashboard monitors three bundled scikit-learn datasets: Wine, Breast Cancer, and Digits. Select Model 1, Model 2, or Model 3 in the dashboard to view isolated traffic and quality metrics for that model.
+## Scope and workflow
 
-Quality metrics are calculated from prediction requests that include an `actual_class` value alongside the selected model's feature vector. Requests without ground truth still contribute to traffic, latency, and prediction-stream metrics, but are excluded from accuracy, precision, recall, and F1-score.
+- The application serves one model: a Random Forest classifier trained on scikit-learn's fixed Wine dataset.
+- The dashboard has no custom dataset upload and accepts no target or ground-truth values from prediction users.
+- Runtime inference is feature-only. The dashboard's demo button asks the server to run the next predefined Wine test input; its label remains server-side.
+- Retraining uses the fixed training portion of the dataset. Jenkins compares the current production model and candidate on the same four rows from a deterministic held-out split.
+- Jenkins promotes and deploys the candidate only when its accuracy is greater than or equal to production accuracy. If it is lower, production stays in place.
+- Accuracy, precision, recall, F1, four per-input outcomes, and the deployment decision are written to the Docker volume `model-dashboard-monitoring`. The dashboard reads that report at `/api/metrics` and displays it.
 
-The API also counts failed predictions, invalid outputs, and missing request values, and reports CPU usage, memory usage, API uptime, and average response latency.
+## Run locally from source
 
-## Add your own dataset
+In PowerShell:
 
-Use **Add a dataset** in the dashboard or send a `multipart/form-data` request to `POST /api/models/upload` with `file` (CSV) and `target_column` fields. The CSV must have numeric feature columns, at least four complete rows, and a target with at least two classes. Files are limited to 10 MB. The endpoint trains a Random Forest in memory and registers it for inference and monitoring until the service restarts.
-
-```bash
-curl -X POST http://localhost:8000/api/models/upload \
-  -F "file=@dataset.csv" \
-  -F "target_column=species"
+```powershell
+cd D:\model-monitoring-dashboard
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m app.train
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
-New models appear in `GET /api/models` and can be used with the existing `POST /predict` endpoint. Interactive API documentation is available at `/docs`; the OpenAPI schema is at `/openapi.json`.
+Open <http://localhost:8000>. Stop the server with **Ctrl+C**. The local baseline model is created at `app/artifacts/production.joblib`; this generated file is ignored by Git.
 
-## Jenkins and Docker Hub
+## API
 
-The Jenkins pipeline checks out the project, installs and validates the app, runs the existing Selenium UI check, and builds versioned and `latest` local Docker tags. To publish, add a Jenkins username/password credential with ID `dockerhub-credentials` (use a Docker Hub access token as the password), then enable `PUBLISH_TO_DOCKER_HUB` and set `DOCKER_HUB_REPOSITORY` to `username/repository` when starting a build. Credentials stay in Jenkins and are not stored in this repository. The pipeline expects a Linux Jenkins agent with Python, Node.js/npm, Docker, curl, and Chrome/Chromium available.
+- `POST /predict` takes only `{"features": [13 numeric Wine feature values]}`. It does not accept a target or actual class.
+- `POST /api/demo-prediction` runs the next server-selected fixed test input without returning its expected class.
+- `GET /api/model` returns the fixed model and feature names.
+- `GET /api/metrics` returns live inference/system metrics and the latest Jenkins evaluation/deployment report.
+- Interactive API docs: <http://localhost:8000/docs>.
+
+## Docker
+
+To build and run from source:
+
+```powershell
+docker build -t model-dashboard:local .
+docker volume create model-dashboard-monitoring
+docker run --rm -p 8000:8000 --mount source=model-dashboard-monitoring,target=/data -e MONITORING_DATA_DIR=/data model-dashboard:local
+```
+
+The named volume retains Jenkins comparison reports when containers are replaced. To run the previously published Docker Hub image, use `deeppatil069/model-monitoring-dashboard:latest`; it must be rebuilt and republished to include these newer code changes.
+
+## Jenkins on Windows
+
+Use a **Pipeline** job configured as **Pipeline script from SCM**, with this repository and branch. `Jenkinsfile` polls SCM every five minutes, checks out commits, and runs `jenkins-build.bat`. The paths near the top of the Jenkinsfile must match the Python and Docker executable locations on the Windows Jenkins machine.
+
+The build script:
+
+1. Creates a workspace virtual environment and installs requirements.
+2. Checks Python syntax and retrains a candidate on the fixed Wine training split.
+3. Evaluates production and candidate on the same four fixed test inputs, records the comparison, and updates the monitoring Docker volume.
+4. Stops before image build/deployment if candidate accuracy is lower.
+5. If approved, builds the Docker image, replaces the named local dashboard container on port 8000, and optionally publishes to Docker Hub.
+
+The previous approved model is persisted under `%JENKINS_HOME%\model-dashboard\production.joblib`, outside the disposable Jenkins workspace. Keep that file and the `model-dashboard-monitoring` Docker volume to preserve production comparison state and dashboard reports between builds. The first run creates a seed-42 baseline and compares a seed-42 candidate.
+
+To enable Docker Hub publishing, create a Jenkins username/password credential with ID `dockerhub-credentials` (Docker Hub username and an access token as the password). Start a build with `PUBLISH_TO_DOCKER_HUB` enabled and set `DOCKERHUB_REPOSITORY` to your namespace/repository. Publishing happens only after the accuracy gate approves.

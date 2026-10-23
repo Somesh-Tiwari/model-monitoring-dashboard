@@ -1,19 +1,16 @@
-import os
+"""Create the deterministic first production model for local development."""
+
+import json
+from pathlib import Path
 
 import joblib
-from sklearn.datasets import load_breast_cancer, load_digits, load_wine
-from sklearn.ensemble import RandomForestClassifier
 
-DATASETS = {
-    "model_1_wine.joblib": load_wine,
-    "model_2_breast_cancer.joblib": load_breast_cancer,
-    "model_3_digits.joblib": load_digits,
-}
+from app.modeling import train_model
 
-for filename, loader in DATASETS.items():
-    dataset = loader()
-    classifier = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
-    classifier.fit(dataset.data, dataset.target)
-    model_path = os.path.join(os.path.dirname(__file__), filename)
-    joblib.dump(classifier, model_path)
-    print(f"Saved {dataset.DESCR.splitlines()[0]} model to {model_path}")
+model_path = Path(__file__).resolve().parent / "artifacts" / "production.joblib"
+model_path.parent.mkdir(parents=True, exist_ok=True)
+joblib.dump(train_model(), model_path)
+model_path.with_name("production-version.json").write_text(
+    json.dumps({"version": "bootstrap-seed-42"}, indent=2), encoding="utf-8"
+)
+print(f"Saved fixed Wine production model to {model_path}")
