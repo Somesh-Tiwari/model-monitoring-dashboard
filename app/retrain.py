@@ -32,6 +32,7 @@ PRODUCTION_PATH = Path(
     )
 )
 PRODUCTION_VERSION_PATH = PRODUCTION_PATH.with_name("production-version.json")
+HISTORY_PATH = PRODUCTION_PATH.with_name("comparison_history.json")
 ACTIVE_VERSION_PATH = ARTIFACT_DIR / "production-version.json"
 
 
@@ -71,6 +72,29 @@ def save_json(path: Path, data):
     temporary.replace(path)
 
 
+def update_comparison_history(candidate_version, candidate_validation, candidate_metrics, approved, timestamp):
+    history = {"dataset": DATASET_NAME, "runs": []}
+    try:
+        existing = json.loads(HISTORY_PATH.read_text(encoding="utf-8"))
+        if existing.get("dataset") == DATASET_NAME and isinstance(existing.get("runs"), list):
+            history = existing
+    except (OSError, json.JSONDecodeError):
+        pass
+    history["runs"].append({
+        "version": candidate_version,
+        "timestamp_utc": timestamp,
+        "validation_accuracy": candidate_validation["accuracy"],
+        "test_accuracy": candidate_metrics["accuracy"],
+        "test_f1_score": candidate_metrics["f1_score"],
+        "test_mae": candidate_metrics["mae"],
+        "deployment_approved": approved,
+    })
+    history["runs"] = history["runs"][-100:]
+    save_json(HISTORY_PATH, history)
+    # Jenkins copies this workspace copy into the Docker monitoring volume.
+    save_json(ARTIFACT_DIR / "comparison_history.json", history)
+
+
 def main():
     _, _, x_validation, y_validation, x_test, y_test, _, validation_players, test_players = load_split()
     previous_model = None
@@ -103,8 +127,9 @@ def main():
     previous_metrics, previous_inputs = score(previous_model, x_test, y_test, test_players)
     candidate_metrics, candidate_inputs = score(candidate_model, x_test, y_test, test_players)
     approved = candidate_validation["accuracy"] >= previous_validation["accuracy"]
+    timestamp = datetime.now(timezone.utc).isoformat()
     report = {
-        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "timestamp_utc": timestamp,
         "dataset": DATASET_NAME,
         "validation_size": len(y_validation),
         "test_size": len(y_test),
@@ -131,6 +156,7 @@ def main():
 
     save_json(ACTIVE_VERSION_PATH, {"version": active_version})
     save_json(REPORT_PATH, report)
+    update_comparison_history(candidate_version, candidate_validation, candidate_metrics, approved, timestamp)
     print(json.dumps(report, indent=2))
     print(f"Evaluation report: {REPORT_PATH}")
     if not approved:

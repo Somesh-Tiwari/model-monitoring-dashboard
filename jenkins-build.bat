@@ -35,6 +35,8 @@ echo Saving comparison report to the dashboard monitoring volume...
 if errorlevel 1 exit /b 1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& $env:DOCKER_EXE run --rm --mount 'type=volume,source=model-dashboard-monitoring,target=/data' --mount ('type=bind,source=' + (Resolve-Path 'app\artifacts\deployment_report.json').Path + ',target=/tmp/deployment_report.json,readonly') alpine:3.20 cp /tmp/deployment_report.json /data/deployment_report.json"
 if errorlevel 1 exit /b 1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& $env:DOCKER_EXE run --rm --mount 'type=volume,source=model-dashboard-monitoring,target=/data' --mount ('type=bind,source=' + (Resolve-Path 'app\artifacts\comparison_history.json').Path + ',target=/tmp/comparison_history.json,readonly') alpine:3.20 cp /tmp/comparison_history.json /data/comparison_history.json"
+if errorlevel 1 exit /b 1
 
 .venv\Scripts\python.exe -c "import json; print(str(json.load(open(r'app\artifacts\deployment_report.json', encoding='utf-8'))['deployment_approved']).lower())" > deployment-approved.txt
 if errorlevel 1 exit /b 1
@@ -83,6 +85,8 @@ if errorlevel 1 exit /b 1
 .venv\Scripts\python.exe -m app.mark_deployed
 if errorlevel 1 exit /b 1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& $env:DOCKER_EXE run --rm --mount 'type=volume,source=model-dashboard-monitoring,target=/data' --mount ('type=bind,source=' + (Resolve-Path 'app\artifacts\deployment_report.json').Path + ',target=/tmp/deployment_report.json,readonly') alpine:3.20 cp /tmp/deployment_report.json /data/deployment_report.json"
+if errorlevel 1 exit /b 1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& $env:DOCKER_EXE run --rm --mount 'type=volume,source=model-dashboard-monitoring,target=/data' --mount ('type=bind,source=' + (Resolve-Path 'app\artifacts\comparison_history.json').Path + ',target=/tmp/comparison_history.json,readonly') alpine:3.20 cp /tmp/comparison_history.json /data/comparison_history.json"
 if errorlevel 1 exit /b 1
 .venv\Scripts\python.exe -m app.promote
 if errorlevel 1 exit /b 1

@@ -27,6 +27,7 @@ ARTIFACT_DIR = APP_DIR / "artifacts"
 PRODUCTION_MODEL_PATH = ARTIFACT_DIR / "production.joblib"
 MONITORING_DIR = Path(os.environ.get("MONITORING_DATA_DIR", str(ARTIFACT_DIR)))
 MONITORING_REPORT_PATH = MONITORING_DIR / "deployment_report.json"
+MONITORING_HISTORY_PATH = MONITORING_DIR / "comparison_history.json"
 MODEL_VERSION_PATH = ARTIFACT_DIR / "production-version.json"
 
 _, _, _, _, TEST_FEATURES, TEST_POINTS, _, _, TEST_PLAYERS = load_split()
@@ -91,6 +92,15 @@ def read_deployment_report():
             return report if report.get("dataset") == DATASET_NAME else None
     except (OSError, json.JSONDecodeError):
         return None
+
+
+def read_comparison_history():
+    try:
+        with MONITORING_HISTORY_PATH.open(encoding="utf-8") as history_file:
+            history = json.load(history_file)
+            return history.get("runs", []) if history.get("dataset") == DATASET_NAME else []
+    except (OSError, json.JSONDecodeError):
+        return []
 
 
 def run_prediction(features: dict[str, Any], *, actual_points: float | None = None, player: dict | None = None):
@@ -172,6 +182,7 @@ def get_metrics():
             },
         },
         "deployment": report,
+        "comparison_history": read_comparison_history(),
         "system_health": {
             "cpu_percent": psutil.cpu_percent(interval=None),
             "memory_percent": psutil.virtual_memory().percent,
